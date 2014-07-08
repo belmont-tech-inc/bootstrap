@@ -29,11 +29,12 @@
     animation: true,
     placement: 'top',
     selector: false,
-    template: '<div class="tooltip" role="tooltip"><div class="tooltip-arrow"></div><div class="tooltip-inner"></div></div>',
+    template: '<div class="tooltip"><div class="tooltip-inner"><div class="tooltip-content"></div><div class="tooltip-expand"></div></div></div>',
     trigger: 'hover focus',
     title: '',
     delay: 0,
     html: false,
+    expandDelay: 3000,
     container: false
   }
 
@@ -97,6 +98,7 @@
       obj : $(obj.currentTarget)[this.type](this.getDelegateOptions()).data('bs.' + this.type)
 
     clearTimeout(self.timeout)
+    clearTimeout(self.expandTimeout)
 
     self.hoverState = 'in'
 
@@ -183,6 +185,22 @@
 
       var complete = function() {
         that.$element.trigger('shown.bs.' + that.type)
+        that.expandTimeout = setTimeout(function () {
+          var expandedContent = that.getExpandedContent();
+          if (expandedContent) {
+            var oldWidth  = $tip.css('width');
+            var oldHeight = $tip.css('height');
+            that.expandContent(expandedContent);
+            var newWidth  = $tip[0].offsetWidth;
+            var newHeight = $tip[0].offsetHeight;
+            $tip.css('height', oldHeight);
+            $tip.css('width', oldWidth);
+            $tip.animate({
+              width: newWidth,
+              height: newHeight,
+            }, 50);
+          }
+        }, that.options.expandDelay);
       }
 
       $.support.transition && this.$tip.hasClass('fade') ?
@@ -261,8 +279,15 @@
     var $tip  = this.tip()
     var title = this.getTitle()
 
-    $tip.find('.tooltip-inner')[this.options.html ? 'html' : 'text'](title)
+    $tip.find('.tooltip-content')[this.options.html ? 'html' : 'text'](title)
     $tip.removeClass('fade in top bottom left right')
+  }
+
+  Tooltip.prototype.expandContent = function (content) {
+    var $tip  = this.tip()
+
+    $tip.find('.tooltip-expand')[this.options.html ? 'html' : 'text'](content)
+    $tip.find('.tooltip-expand').show();
   }
 
   Tooltip.prototype.hide = function () {
@@ -271,6 +296,9 @@
     var e    = $.Event('hide.bs.' + this.type)
 
     function complete() {
+      $tip.find('.tooltip-expand').html('').css('display', 'none');
+      $tip.css('width', 'auto');
+      $tip.css('height', 'auto');
       if (that.hoverState != 'in') $tip.detach()
       that.$element.trigger('hidden.bs.' + that.type)
     }
@@ -297,10 +325,24 @@
     if ($e.attr('title') || typeof($e.attr('data-original-title')) != 'string') {
       $e.attr('data-original-title', $e.attr('title') || '').attr('title', '')
     }
+    if ($e.attr('data-expandedContent') || typeof($e.attr('data-original-expandedContent')) != 'string') {
+      $e.attr('data-original-expandedContent', $e.attr('data-expandedContent') || '').attr('data-expandedContent', '')
+    }
   }
 
   Tooltip.prototype.hasContent = function () {
     return this.getTitle()
+  }
+
+  Tooltip.prototype.getExpandedContent = function () {
+    var expandedContent
+    var $e = this.$element
+    var o  = this.options
+
+    expandedContent = $e.attr('data-original-expandedContent')
+      || (typeof o.expandedContent == 'function' ? o.expandedContent.call($e[0]) :  o.title)
+
+    return expandedContent
   }
 
   Tooltip.prototype.getPosition = function () {
