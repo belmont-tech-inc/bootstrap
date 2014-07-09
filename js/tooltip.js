@@ -114,6 +114,7 @@
       obj : $(obj.currentTarget)[this.type](this.getDelegateOptions()).data('bs.' + this.type)
 
     clearTimeout(self.timeout)
+    clearTimeout(self.expandTimeout)
 
     self.hoverState = 'out'
 
@@ -134,6 +135,7 @@
       var that = this;
 
       var $tip = this.tip()
+      $tip.stop()
 
       this.setContent()
 
@@ -147,9 +149,13 @@
       var autoPlace = autoToken.test(placement)
       if (autoPlace) placement = placement.replace(autoToken, '') || 'top'
 
+      // Clear out expand
+      $tip.find('.tooltip-expand')[this.options.html ? 'html' : 'text']('')
+      $tip.find('.tooltip-expand').hide()
+
       $tip
         .detach()
-        .css({ top: 0, left: 0, display: 'block' })
+        .css({ top: 0, left: 0, display: 'block', width: 'auto', height: 'auto' })
         .addClass(placement)
 
       this.options.container ? $tip.appendTo(this.options.container) : $tip.insertAfter(this.$element)
@@ -406,6 +412,7 @@
 
   Tooltip.prototype.destroy = function () {
     clearTimeout(this.timeout)
+    clearTimeout(this.expandTimeout)
     this.hide().$element.off('.' + this.type).removeData('bs.' + this.type)
   }
 
