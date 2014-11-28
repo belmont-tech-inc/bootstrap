@@ -189,6 +189,8 @@
       this.applyPlacement(calculatedOffset, placement)
       this.hoverState = null
 
+      var expandDelay = this.getExpandDelay(that.options.expandDelay);
+
       var complete = function() {
         that.$element.trigger('shown.bs.' + that.type)
         that.expandTimeout = setTimeout(function () {
@@ -206,7 +208,7 @@
               height: newHeight,
             }, 50);
           }
-        }, that.options.expandDelay);
+        }, expandDelay);
       }
 
       $.support.transition && this.$tip.hasClass('fade') ?
@@ -338,6 +340,13 @@
 
   Tooltip.prototype.hasContent = function () {
     return this.getTitle()
+  }
+
+  Tooltip.prototype.getExpandDelay = function (defaultExpandDelay) {
+    var $e = this.$element
+    var o = this.options
+    var expandDelay = $e.attr('data-expandDelay') || defaultExpandDelay;
+    return expandDelay;
   }
 
   Tooltip.prototype.getExpandedContent = function () {
