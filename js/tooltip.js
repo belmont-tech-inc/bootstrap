@@ -360,9 +360,12 @@
   }
 
   Tooltip.prototype.getCalculatedOffset = function (placement, pos, actualWidth, actualHeight) {
-    return placement == 'bottom'       ? { top: pos.top + pos.height,   left: pos.left + pos.width / 2 - actualWidth / 2  } :
-           placement == 'bottom-left'  ? { top: pos.top + pos.height, left: pos.left                                      } :
+    return placement == 'bottom'       ? { top: pos.top + pos.height, left: pos.left + pos.width / 2 - actualWidth / 2    } :
+           placement == 'bottom-left'  ? { top: pos.top + pos.height, left: pos.right - actualWidth                       } :
+           placement == 'bottom-right' ? { top: pos.top + pos.height, left: pos.left                                      } :
            placement == 'top'          ? { top: pos.top - actualHeight, left: pos.left + pos.width / 2 - actualWidth / 2  } :
+           placement == 'top-left'     ? { top: pos.top - actualHeight, left: pos.right - actualWidth                      } :
+           placement == 'top-right'    ? { top: pos.top - actualHeight, left: pos.left                                    } :
            placement == 'left'         ? { top: pos.top + pos.height / 2 - actualHeight / 2, left: pos.left - actualWidth } :
         /* placement == 'right' */       { top: pos.top + pos.height / 2 - actualHeight / 2, left: pos.left + pos.width   }
   }

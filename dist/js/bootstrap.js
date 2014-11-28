@@ -1077,11 +1077,12 @@ if (typeof jQuery === 'undefined') { throw new Error('Bootstrap\'s JavaScript re
     animation: true,
     placement: 'top',
     selector: false,
-    template: '<div class="tooltip" role="tooltip"><div class="tooltip-arrow"></div><div class="tooltip-inner"></div></div>',
+    template: '<div class="tooltip"><div class="tooltip-inner"><div class="tooltip-content"></div><div class="tooltip-expand"></div></div></div>',
     trigger: 'hover focus',
     title: '',
     delay: 0,
     html: false,
+    expandDelay: 3000,
     container: false
   }
 
@@ -1145,6 +1146,7 @@ if (typeof jQuery === 'undefined') { throw new Error('Bootstrap\'s JavaScript re
       obj : $(obj.currentTarget)[this.type](this.getDelegateOptions()).data('bs.' + this.type)
 
     clearTimeout(self.timeout)
+    clearTimeout(self.expandTimeout)
 
     self.hoverState = 'in'
 
@@ -1160,6 +1162,7 @@ if (typeof jQuery === 'undefined') { throw new Error('Bootstrap\'s JavaScript re
       obj : $(obj.currentTarget)[this.type](this.getDelegateOptions()).data('bs.' + this.type)
 
     clearTimeout(self.timeout)
+    clearTimeout(self.expandTimeout)
 
     self.hoverState = 'out'
 
@@ -1180,6 +1183,7 @@ if (typeof jQuery === 'undefined') { throw new Error('Bootstrap\'s JavaScript re
       var that = this;
 
       var $tip = this.tip()
+      $tip.stop()
 
       this.setContent()
 
@@ -1193,9 +1197,13 @@ if (typeof jQuery === 'undefined') { throw new Error('Bootstrap\'s JavaScript re
       var autoPlace = autoToken.test(placement)
       if (autoPlace) placement = placement.replace(autoToken, '') || 'top'
 
+      // Clear out expand
+      $tip.find('.tooltip-expand')[this.options.html ? 'html' : 'text']('')
+      $tip.find('.tooltip-expand').hide()
+
       $tip
         .detach()
-        .css({ top: 0, left: 0, display: 'block' })
+        .css({ top: 0, left: 0, display: 'block', width: 'auto', height: 'auto' })
         .addClass(placement)
 
       this.options.container ? $tip.appendTo(this.options.container) : $tip.insertAfter(this.$element)
@@ -1231,6 +1239,22 @@ if (typeof jQuery === 'undefined') { throw new Error('Bootstrap\'s JavaScript re
 
       var complete = function() {
         that.$element.trigger('shown.bs.' + that.type)
+        that.expandTimeout = setTimeout(function () {
+          var expandedContent = that.getExpandedContent();
+          if (expandedContent) {
+            var oldWidth  = $tip.css('width');
+            var oldHeight = $tip.css('height');
+            that.expandContent(expandedContent);
+            var newWidth  = $tip[0].offsetWidth;
+            var newHeight = $tip[0].offsetHeight;
+            $tip.css('height', oldHeight);
+            $tip.css('width', oldWidth);
+            $tip.animate({
+              width: newWidth,
+              height: newHeight,
+            }, 50);
+          }
+        }, that.options.expandDelay);
       }
 
       $.support.transition && this.$tip.hasClass('fade') ?
@@ -1309,8 +1333,15 @@ if (typeof jQuery === 'undefined') { throw new Error('Bootstrap\'s JavaScript re
     var $tip  = this.tip()
     var title = this.getTitle()
 
-    $tip.find('.tooltip-inner')[this.options.html ? 'html' : 'text'](title)
+    $tip.find('.tooltip-content')[this.options.html ? 'html' : 'text'](title)
     $tip.removeClass('fade in top bottom left right')
+  }
+
+  Tooltip.prototype.expandContent = function (content) {
+    var $tip  = this.tip()
+
+    $tip.find('.tooltip-expand')[this.options.html ? 'html' : 'text'](content)
+    $tip.find('.tooltip-expand').show();
   }
 
   Tooltip.prototype.hide = function () {
@@ -1319,6 +1350,9 @@ if (typeof jQuery === 'undefined') { throw new Error('Bootstrap\'s JavaScript re
     var e    = $.Event('hide.bs.' + this.type)
 
     function complete() {
+      $tip.find('.tooltip-expand').html('').css('display', 'none');
+      $tip.css('width', 'auto');
+      $tip.css('height', 'auto');
       if (that.hoverState != 'in') $tip.detach()
       that.$element.trigger('hidden.bs.' + that.type)
     }
@@ -1345,10 +1379,24 @@ if (typeof jQuery === 'undefined') { throw new Error('Bootstrap\'s JavaScript re
     if ($e.attr('title') || typeof($e.attr('data-original-title')) != 'string') {
       $e.attr('data-original-title', $e.attr('title') || '').attr('title', '')
     }
+    if ($e.attr('data-expandedContent') || typeof($e.attr('data-original-expandedContent')) != 'string') {
+      $e.attr('data-original-expandedContent', $e.attr('data-expandedContent') || '').attr('data-expandedContent', '')
+    }
   }
 
   Tooltip.prototype.hasContent = function () {
     return this.getTitle()
+  }
+
+  Tooltip.prototype.getExpandedContent = function () {
+    var expandedContent
+    var $e = this.$element
+    var o  = this.options
+
+    expandedContent = $e.attr('data-original-expandedContent')
+      || (typeof o.expandedContent == 'function' ? o.expandedContent.call($e[0]) :  o.title)
+
+    return expandedContent
   }
 
   Tooltip.prototype.getPosition = function () {
@@ -1360,10 +1408,14 @@ if (typeof jQuery === 'undefined') { throw new Error('Bootstrap\'s JavaScript re
   }
 
   Tooltip.prototype.getCalculatedOffset = function (placement, pos, actualWidth, actualHeight) {
-    return placement == 'bottom' ? { top: pos.top + pos.height,   left: pos.left + pos.width / 2 - actualWidth / 2  } :
-           placement == 'top'    ? { top: pos.top - actualHeight, left: pos.left + pos.width / 2 - actualWidth / 2  } :
-           placement == 'left'   ? { top: pos.top + pos.height / 2 - actualHeight / 2, left: pos.left - actualWidth } :
-        /* placement == 'right' */ { top: pos.top + pos.height / 2 - actualHeight / 2, left: pos.left + pos.width   }
+    return placement == 'bottom'       ? { top: pos.top + pos.height, left: pos.left + pos.width / 2 - actualWidth / 2    } :
+           placement == 'bottom-left'  ? { top: pos.top + pos.height, left: pos.right - actualWidth                       } :
+           placement == 'bottom-right' ? { top: pos.top + pos.height, left: pos.left                                      } :
+           placement == 'top'          ? { top: pos.top - actualHeight, left: pos.left + pos.width / 2 - actualWidth / 2  } :
+           placement == 'top-left'     ? { top: pos.top - actualHeight, left: pos.right - actualWidth                      } :
+           placement == 'top-right'    ? { top: pos.top - actualHeight, left: pos.left                                    } :
+           placement == 'left'         ? { top: pos.top + pos.height / 2 - actualHeight / 2, left: pos.left - actualWidth } :
+        /* placement == 'right' */       { top: pos.top + pos.height / 2 - actualHeight / 2, left: pos.left + pos.width   }
   }
 
   Tooltip.prototype.getTitle = function () {
@@ -1412,6 +1464,7 @@ if (typeof jQuery === 'undefined') { throw new Error('Bootstrap\'s JavaScript re
 
   Tooltip.prototype.destroy = function () {
     clearTimeout(this.timeout)
+    clearTimeout(this.expandTimeout)
     this.hide().$element.off('.' + this.type).removeData('bs.' + this.type)
   }
 
