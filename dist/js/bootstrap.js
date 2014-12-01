@@ -1253,7 +1253,7 @@ if (typeof jQuery === 'undefined') { throw new Error('Bootstrap\'s JavaScript re
             $tip.css('width', oldWidth);
             $tip.animate({
               width: newWidth,
-              height: newHeight,
+              height: newHeight
             }, 50);
           }
         }, expandDelay);
