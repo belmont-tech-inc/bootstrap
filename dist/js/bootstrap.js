@@ -1244,16 +1244,11 @@ if (typeof jQuery === 'undefined') { throw new Error('Bootstrap\'s JavaScript re
         that.expandTimeout = setTimeout(function () {
           var expandedContent = that.getExpandedContent();
           if (expandedContent) {
-            var oldWidth  = $tip.css('width');
             var oldHeight = $tip.css('height');
             that.expandContent(expandedContent);
-            var newWidth  = $tip[0].offsetWidth;
-            var newHeight = $tip[0].offsetHeight;
             $tip.css('height', oldHeight);
-            $tip.css('width', oldWidth);
             $tip.animate({
-              width: newWidth,
-              height: newHeight
+              height: 'auto'
             }, 50);
           }
         }, expandDelay);
