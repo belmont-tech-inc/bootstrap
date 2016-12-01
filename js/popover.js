@@ -14,6 +14,7 @@
   // ===============================
 
   var Popover = function (element, options) {
+    this.position = null
     this.init('popover', element, options)
   }
 
@@ -78,7 +79,16 @@
     return this.$tip
   }
 
-
+  Popover.prototype.destroy = function () {
+    clearTimeout(this.timeout)
+    clearTimeout(this.expandTimeout)
+    var $element = this.$element
+    var type = this.type
+    this.$element.one('hidden.bs.' + this.type, function() {
+      $element.off('.' + type).removeData('bs.' + type)
+    })
+    this.hide()
+  }
   // POPOVER PLUGIN DEFINITION
   // =========================
 

@@ -15,12 +15,14 @@
   // ===============================
 
   var Tooltip = function (element, options) {
-    this.type       =
-    this.options    =
-    this.enabled    =
-    this.timeout    =
-    this.hoverState =
-    this.$element   = null
+    this.type          =
+    this.options       =
+    this.enabled       =
+    this.timeout       =
+    this.hoverState    =
+    this.escapedTitles =
+    this.position      =
+    this.$element      = null
 
     this.init('tooltip', element, options)
   }
@@ -105,7 +107,8 @@
     if (!self.options.delay || !self.options.delay.show) return self.show()
 
     self.timeout = setTimeout(function () {
-      if (self.hoverState == 'in') self.show()
+      var enabled = $(document.body).data('bs.global.enabled');
+      if (self.hoverState == 'in' && enabled) self.show()
     }, self.options.delay.show)
   }
 
@@ -141,6 +144,7 @@
 
       if (this.options.animation) $tip.addClass('fade')
 
+      var data = this.$element.data();
       var placement = typeof this.options.placement == 'function' ?
         this.options.placement.call(this, $tip[0], this.$element[0]) :
         this.options.placement
@@ -163,15 +167,16 @@
       var pos          = this.getPosition()
       var actualWidth  = $tip[0].offsetWidth
       var actualHeight = $tip[0].offsetHeight
+      var orgPlacement, docScroll, parentWidth, parentHeight, parentLeft;
 
       if (autoPlace) {
         var $parent = this.$element.parent()
 
-        var orgPlacement = placement
-        var docScroll    = document.documentElement.scrollTop
-        var parentWidth  = this.options.container == 'body' ? window.innerWidth  : $parent.outerWidth()
-        var parentHeight = this.options.container == 'body' ? window.innerHeight : $parent.outerHeight()
-        var parentLeft   = this.options.container == 'body' ? 0 : $parent.offset().left
+        orgPlacement = placement
+        docScroll    = document.documentElement.scrollTop
+        parentWidth  = this.options.container == 'body' ? window.innerWidth  : $parent.outerWidth()
+        parentHeight = this.options.container == 'body' ? window.innerHeight : $parent.outerHeight()
+        parentLeft   = this.options.container == 'body' ? 0 : $parent.offset().left
 
         placement = placement == 'bottom' && pos.top   + pos.height  + actualHeight - docScroll > parentHeight  ? 'top'    :
                     placement == 'top'    && pos.top   - docScroll   - actualHeight < 0                         ? 'bottom' :
@@ -186,24 +191,52 @@
 
       var calculatedOffset = this.getCalculatedOffset(placement, pos, actualWidth, actualHeight)
 
-      this.applyPlacement(calculatedOffset, placement)
-      this.hoverState = null
+      if (autoPlace) {
+        calculatedOffset.left = calculatedOffset.left | 0;
+        if (calculatedOffset.left + actualWidth > parentWidth) {
+          var diff = parentWidth - (calculatedOffset.left + actualWidth);
+          calculatedOffset.left += diff;
+          $tip.find('.arrow').css('margin-left', Math.abs(diff) - 11 + 'px');
+        }
+      }
+      if (this.type == 'tooltip' && (0 > calculatedOffset.top && 5 > calculatedOffset.left ||  0 > calculatedOffset.left && 5 > calculatedOffset.top)) {
+        return this.hide();
+      }
 
       var expandDelay = this.getExpandDelay(that.options.expandDelay);
+      var expandedContent = that.getExpandedContent();
+      var complete;
 
-      var complete = function() {
-        that.$element.trigger('shown.bs.' + that.type)
-        that.expandTimeout = setTimeout(function () {
-          var expandedContent = that.getExpandedContent();
-          if (expandedContent) {
-            var oldHeight = $tip.css('height');
-            that.expandContent(expandedContent);
-            $tip.css('height', oldHeight);
-            $tip.animate({
-              height: 'auto'
-            }, 50);
-          }
-        }, expandDelay);
+      if (!expandedContent || expandDelay) {
+        this.applyPlacement(calculatedOffset, placement)
+        this.hoverState = null
+
+
+        complete = function() {
+          that.$element.trigger('shown.bs.' + that.type)
+          that.expandTimeout = setTimeout(function () {
+            if (expandedContent) {
+              var oldHeight = $tip.css('height');
+              that.expandContent(expandedContent);
+              $tip.css('height', oldHeight);
+              $tip.animate({
+                height: 'auto'
+              }, 50);
+            }
+          }, expandDelay);
+        }
+      } else {
+        complete = function() {
+          that.applyPlacement(calculatedOffset, placement)
+          that.hoverState = null
+          that.$element.trigger('shown.bs.' + that.type)
+          var oldHeight = $tip.css('height');
+          that.expandContent(expandedContent);
+          $tip.css('height', oldHeight);
+          $tip.animate({
+            height: 'auto'
+          }, 50);
+        }
       }
 
       $.support.transition && this.$tip.hasClass('fade') ?
@@ -233,14 +266,15 @@
 
     // $.fn.offset doesn't round pixel values
     // so we use setOffset directly with our own function B-0
-    $.offset.setOffset($tip[0], $.extend({
+    this.position = $.extend({
       using: function (props) {
         $tip.css({
           top: Math.round(props.top),
           left: Math.round(props.left)
         })
       }
-    }, offset), 0)
+    }, offset);
+    $.offset.setOffset($tip[0], this.position, 0)
 
     $tip.addClass('in')
 
@@ -271,7 +305,12 @@
       this.replaceArrow(actualHeight - height, actualHeight, 'top')
     }
 
-    if (replace) $tip.offset(offset)
+    if (replace) {
+      this.position = offset
+      $tip.offset(this.position)
+    }
+
+    this.$element.trigger('moved.bs.' + this.type)
   }
 
   Tooltip.prototype.replaceArrow = function (delta, dimension, position) {
@@ -291,6 +330,7 @@
 
     $tip.find('.tooltip-expand')[this.options.html ? 'html' : 'text'](content)
     $tip.find('.tooltip-expand').show();
+    $tip.trigger('expand');
   }
 
   Tooltip.prototype.hide = function () {
@@ -324,12 +364,21 @@
   }
 
   Tooltip.prototype.fixTitle = function () {
-    var $e = this.$element
-    if ($e.attr('title') || typeof($e.attr('data-original-title')) != 'string') {
-      $e.attr('data-original-title', $e.attr('title') || '').attr('title', '')
+    var $e = this.$element,
+      data = $e.data();
+
+    if ($e.attr('title')) {
+      if (typeof $e.attr('data-original-title') != 'string') {
+        $e.attr('data-original-title', $e.attr('title'));
+      }
+      $e.attr('title', '');
     }
-    if ($e.attr('data-expandedContent') || typeof($e.attr('data-original-expandedContent')) != 'string') {
-      $e.attr('data-original-expandedContent', $e.attr('data-expandedContent') || '').attr('data-expandedContent', '')
+
+    if (data.expandedContent) {
+      if (data.originalExpandedContent == null) {
+        $e.attr('data-original-expanded-content', data.expandedContent);
+      }
+      $e.attr('data-expanded-content', '');
     }
   }
 
@@ -340,8 +389,8 @@
   Tooltip.prototype.getExpandDelay = function (defaultExpandDelay) {
     var $e = this.$element
     var o = this.options
-    var expandDelay = $e.attr('data-expandDelay') || defaultExpandDelay;
-    return expandDelay;
+    var expandDelay = +($e.attr('data-expand-delay') || $e.attr('data-expandDelay'));
+    return expandDelay === expandDelay ? expandDelay : defaultExpandDelay;
   }
 
   Tooltip.prototype.getExpandedContent = function () {
@@ -349,8 +398,14 @@
     var $e = this.$element
     var o  = this.options
 
-    expandedContent = $e.attr('data-original-expandedContent')
-      || (typeof o.expandedContent == 'function' ? o.expandedContent.call($e[0]) :  o.title)
+    if (this.escapedTitles) {
+      expandedContent = this.escapedTitles.expanded
+    }
+
+    if (!expandedContent) {
+      expandedContent = $e.attr('data-expanded-content') || $e.attr('data-original-expanded-content') || $e.attr('data-original-expandedContent')
+        || (typeof o.expandedContent == 'function' ? o.expandedContent.call($e[0]) :  o.title)
+    }
 
     return expandedContent
   }
@@ -365,11 +420,11 @@
 
   Tooltip.prototype.getCalculatedOffset = function (placement, pos, actualWidth, actualHeight) {
     return placement == 'bottom'       ? { top: pos.top + pos.height, left: pos.left + pos.width / 2 - actualWidth / 2    } :
-           placement == 'bottom-left'  ? { top: pos.top + pos.height, left: pos.right - actualWidth                       } :
-           placement == 'bottom-right' ? { top: pos.top + pos.height, left: pos.left                                      } :
+           (placement == 'bottom-left' || placement == 'left-bottom') ? { top: pos.top + pos.height, left: pos.right - actualWidth                       } :
+           (placement == 'bottom-right' || placement == 'right-bottom') ? { top: pos.top + pos.height, left: pos.left                                      } :
            placement == 'top'          ? { top: pos.top - actualHeight, left: pos.left + pos.width / 2 - actualWidth / 2  } :
-           placement == 'top-left'     ? { top: pos.top - actualHeight, left: pos.right - actualWidth                      } :
-           placement == 'top-right'    ? { top: pos.top - actualHeight, left: pos.left                                    } :
+           (placement == 'top-left'  || placement == 'left-top') ? { top: pos.top + pos.height / 2 - actualHeight / 2, left: pos.left - actualWidth } :
+           (placement == 'top-right' || placement == 'right-top') ? { top: pos.top + pos.height / 2 - actualHeight / 2, left: pos.left + pos.width } :
            placement == 'left'         ? { top: pos.top + pos.height / 2 - actualHeight / 2, left: pos.left - actualWidth } :
         /* placement == 'right' */       { top: pos.top + pos.height / 2 - actualHeight / 2, left: pos.left + pos.width   }
   }
@@ -379,8 +434,11 @@
     var $e = this.$element
     var o  = this.options
 
-    title = $e.attr('data-original-title')
-      || (typeof o.title == 'function' ? o.title.call($e[0]) :  o.title)
+    if (this.escapedTitles) {
+      title = this.escapedTitles.title
+    } else {
+      title = $e.attr('data-original-title') || (typeof o.title == 'function' ? o.title.call($e[0]) :  o.title)
+    }
 
     return title
   }
